@@ -12,6 +12,17 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+variable "additional_thumbprints" {
+  default     = null
+  description = "List of additional thumbprints for the OIDC provider."
+  type        = list(string)
+
+  validation {
+    condition     = var.additional_thumbprints == null ? true : length(var.additional_thumbprints) <= 3
+    error_message = "Only 3 additional thumbprints can be set, for a maximum of 5 in the OIDC provider."
+  }
+}
+
 variable "attach_admin_policy" {
   default     = false
   description = "Flag to enable/disable the attachment of the AdministratorAccess policy."
@@ -36,10 +47,16 @@ variable "enabled" {
   type        = bool
 }
 
+variable "enterprise_slug" {
+  default     = ""
+  description = "Enterprise slug for GitHub Enterprise Cloud customers."
+  type        = string
+}
+
 variable "force_detach_policies" {
   default     = false
   description = "Flag to force detachment of policies attached to the IAM role."
-  type        = string
+  type        = bool
 }
 
 variable "github_repositories" {
@@ -51,20 +68,10 @@ variable "github_repositories" {
     // organization/repository format used by GitHub.
     condition = length([
       for repo in var.github_repositories : 1
-      if length(regexall("^[A-Za-z0-9_.-]+?/([A-Za-z0-9_.:/-]+|\\*)$", repo)) > 0
+      if length(regexall("^[A-Za-z0-9_.-]+?/([A-Za-z0-9_.:/-]+[*]?|\\*)$", repo)) > 0
     ]) == length(var.github_repositories)
     error_message = "Repositories must be specified in the organization/repository format."
   }
-}
-
-// Refer to the README for information on obtaining the thumbprint.
-// This is specified as a variable to allow it to be updated quickly if it is
-// unexpectedly changed by GitHub.
-// See: https://github.blog/changelog/2022-01-13-github-actions-update-on-oidc-based-deployments-to-aws/
-variable "github_thumbprint" {
-  default     = "6938fd4d98bab03faadb97b34396831e3780aea1"
-  description = "GitHub OpenID TLS certificate thumbprint."
-  type        = string
 }
 
 variable "iam_role_name" {

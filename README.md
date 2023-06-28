@@ -1,14 +1,19 @@
-# AWS federation for GitHub Actions
+# OpenID Connect for AWS and GitHub Actions
 
 [![CI](https://github.com/unfunco/terraform-aws-oidc-github/actions/workflows/ci.yaml/badge.svg)](https://github.com/unfunco/terraform-aws-oidc-github/actions/workflows/ci.yaml)
 [![Cron / Verify](https://github.com/unfunco/terraform-aws-oidc-github/actions/workflows/cron.yaml/badge.svg)](https://github.com/unfunco/terraform-aws-oidc-github/actions/workflows/cron.yaml)
 [![Security](https://github.com/unfunco/terraform-aws-oidc-github/actions/workflows/security.yaml/badge.svg)](https://github.com/unfunco/terraform-aws-oidc-github/actions/workflows/security.yaml)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache_2.0-purple.svg)](https://opensource.org/licenses/Apache-2.0)
 
 Terraform module to configure GitHub Actions as an IAM OIDC identity provider in
-AWS. This enables GitHub Actions to access resources within an AWS account
-without requiring long-lived credentials to be stored as GitHub secrets.
+AWS. OpenID Connect allows GitHub Actions workflows to access resources in AWS
+without requiring the AWS credentials as to be stored long-lived GitHub secrets.
 
 ## 🔨 Getting started
+
+### Requirements
+
+- [Terraform] 1.0+
 
 ### Installation and usage
 
@@ -21,9 +26,9 @@ provider "aws" {
   region = var.region
 }
 
-module "aws_oidc_github" {
+module "oidc_github" {
   source  = "unfunco/oidc-github/aws"
-  version = "0.8.0"
+  version = "1.5.1"
 
   github_repositories = [
     "org/repo",
@@ -36,6 +41,7 @@ The following demonstrates how to use GitHub Actions once the Terraform module
 has been applied to your AWS account. The action receives a JSON Web Token (JWT)
 from the GitHub OIDC provider and then requests an access token from AWS.
 
+<!-- prettier-ignore -->
 ```yaml
 jobs:
   caller-identity:
@@ -48,36 +54,26 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v3
     - name: Configure AWS credentials
-      uses: aws-actions/configure-aws-credentials@v1
+      uses: aws-actions/configure-aws-credentials@v2
       with:
-        aws-region: ${{ secrets.AWS_REGION }}
-        role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github
+        aws-region: ${{ env.AWS_REGION }}
+        role-to-assume: arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/github
     - run: aws sts get-caller-identity
 ```
 
+#### Enterprise Cloud
+
+Organisations using GitHub Enterprise Cloud can further improve their security
+posture by setting the `enterprise_slug` variable. This configuration ensures
+that the organisation will receive OIDC tokens from a unique URL, after this is
+applied, the JWT will contain an updated `iss` claim.
+
 <!-- BEGIN_TF_DOCS -->
-
-## Requirements
-
-| Name                                                                      | Version |
-|---------------------------------------------------------------------------|---------|
-| <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | ~> 1.0  |
-| <a name="requirement_aws"></a> [aws](#requirement\_aws)                   | ~> 4.0  |
-
-## Providers
-
-| Name                                              | Version |
-|---------------------------------------------------|---------|
-| <a name="provider_aws"></a> [aws](#provider\_aws) | ~> 4.0  |
-
-## Modules
-
-No modules.
 
 ## Resources
 
 | Name                                                                                                                                                 | Type        |
-|------------------------------------------------------------------------------------------------------------------------------------------------------|-------------|
+| ---------------------------------------------------------------------------------------------------------------------------------------------------- | ----------- |
 | [aws_iam_openid_connect_provider.github](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_openid_connect_provider)    | resource    |
 | [aws_iam_role.github](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role)                                          | resource    |
 | [aws_iam_role_policy_attachment.admin](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy_attachment)       | resource    |
@@ -86,48 +82,51 @@ No modules.
 | [aws_iam_openid_connect_provider.github](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_openid_connect_provider) | data source |
 | [aws_iam_policy_document.assume_role](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document)            | data source |
 | [aws_partition.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/partition)                                    | data source |
+| [tls_certificate.github](https://registry.terraform.io/providers/hashicorp/tls/latest/docs/data-sources/certificate)                                 | data source |
 
 ## Inputs
 
-| Name                                                                                                                            | Description                                                              | Type           | Default                                      | Required |
-|---------------------------------------------------------------------------------------------------------------------------------|--------------------------------------------------------------------------|----------------|----------------------------------------------|:--------:|
-| <a name="input_attach_admin_policy"></a> [attach\_admin\_policy](#input\_attach\_admin\_policy)                                 | Flag to enable/disable the attachment of the AdministratorAccess policy. | `bool`         | `false`                                      |    no    |
-| <a name="input_attach_read_only_policy"></a> [attach\_read\_only\_policy](#input\_attach\_read\_only\_policy)                   | Flag to enable/disable the attachment of the ReadOnly policy.            | `bool`         | `true`                                       |    no    |
-| <a name="input_create_oidc_provider"></a> [create\_oidc\_provider](#input\_create\_oidc\_provider)                              | Flag to enable/disable the creation of the GitHub OIDC provider.         | `bool`         | `true`                                       |    no    |
-| <a name="input_enabled"></a> [enabled](#input\_enabled)                                                                         | Flag to enable/disable the creation of resources.                        | `bool`         | `true`                                       |    no    |
-| <a name="input_force_detach_policies"></a> [force\_detach\_policies](#input\_force\_detach\_policies)                           | Flag to force detachment of policies attached to the IAM role.           | `string`       | `false`                                      |    no    |
-| <a name="input_github_repositories"></a> [github\_repositories](#input\_github\_repositories)                                   | List of GitHub organization/repository names.                            | `list(string)` | n/a                                          |   yes    |
-| <a name="input_github_thumbprint"></a> [github\_thumbprint](#input\_github\_thumbprint)                                         | GitHub OpenID TLS certificate thumbprint.                                | `string`       | `"6938fd4d98bab03faadb97b34396831e3780aea1"` |    no    |
-| <a name="iam_role_inline_policies"></a> [iam\_role\_inline\_policies](#iam\_role\_inline\_policies)                             | Inline policies map with policy name as key and json as value.           | `map(string)`  | `{}`                                         |    no    |
-| <a name="input_iam_role_name"></a> [iam\_role\_name](#input\_iam\_role\_name)                                                   | Name of the IAM role.                                                    | `string`       | `"github"`                                   |    no    |
-| <a name="input_iam_role_path"></a> [iam\_role\_path](#input\_iam\_role\_path)                                                   | Path to the IAM role.                                                    | `string`       | `"/"`                                        |    no    |
-| <a name="input_iam_role_permissions_boundary"></a> [iam\_role\_permissions\_boundary](#input\_iam\_role\_permissions\_boundary) | ARN of the permissions boundary to be used by the IAM role.              | `string`       | `""`                                         |    no    |
-| <a name="input_iam_role_policy_arns"></a> [iam\_role\_policy\_arns](#input\_iam\_role\_policy\_arns)                            | List of IAM policy ARNs to attach to the IAM role.                       | `list(string)` | `[]`                                         |    no    |
-| <a name="input_max_session_duration"></a> [max\_session\_duration](#input\_max\_session\_duration)                              | Maximum session duration in seconds.                                     | `number`       | `3600`                                       |    no    |
-| <a name="input_tags"></a> [tags](#input\_tags)                                                                                  | Map of tags to be applied to all resources.                              | `map(string)`  | `{}`                                         |    no    |
+| Name                          | Description                                                                 | Type           | Default    | Required |
+| ----------------------------- | --------------------------------------------------------------------------- | -------------- | ---------- | :------: |
+| additional_thumbprints        | List of additional thumbprints for the OIDC provider.                       | `list(string)` | `null`     |    no    |
+| attach_admin_policy           | Flag to enable/disable the attachment of the AdministratorAccess policy.    | `bool`         | `false`    |    no    |
+| attach_read_only_policy       | Flag to enable/disable the attachment of the ReadOnly policy.               | `bool`         | `true`     |    no    |
+| create_oidc_provider          | Flag to enable/disable the creation of the GitHub OIDC provider.            | `bool`         | `true`     |    no    |
+| enabled                       | Flag to enable/disable the creation of resources.                           | `bool`         | `true`     |    no    |
+| enterprise_slug               | Enterprise slug for GitHub Enterprise Cloud customers.                      | `string`       | `""`       |    no    |
+| force_detach_policies         | Flag to force detachment of policies attached to the IAM role.              | `bool`         | `false`    |    no    |
+| github_repositories           | List of GitHub organization/repository names authorized to assume the role. | `list(string)` | n/a        |   yes    |
+| iam_role_inline_policies      | Inline policies map with policy name as key and json as value.              | `map(string)`  | `{}`       |    no    |
+| iam_role_name                 | Name of the IAM role to be created. This will be assumable by GitHub.       | `string`       | `"github"` |    no    |
+| iam_role_path                 | Path under which to create IAM role.                                        | `string`       | `"/"`      |    no    |
+| iam_role_permissions_boundary | ARN of the permissions boundary to be used by the IAM role.                 | `string`       | `""`       |    no    |
+| iam_role_policy_arns          | List of IAM policy ARNs to attach to the IAM role.                          | `list(string)` | `[]`       |    no    |
+| max_session_duration          | Maximum session duration in seconds.                                        | `number`       | `3600`     |    no    |
+| tags                          | Map of tags to be applied to all resources.                                 | `map(string)`  | `{}`       |    no    |
 
 ## Outputs
 
-| Name                                                                         | Description          |
-|------------------------------------------------------------------------------|----------------------|
-| <a name="output_iam_role_arn"></a> [iam\_role\_arn](#output\_iam\_role\_arn) | ARN of the IAM role. |
+| Name         | Description          |
+| ------------ | -------------------- |
+| iam_role_arn | ARN of the IAM role. |
+
 <!-- END_TF_DOCS -->
 
 ## References
 
-* [Configuring OpenID Connect in Amazon Web Services]
-* [Creating OpenID Connect (OIDC) identity providers]
-* [Obtaining the thumbprint for an OpenID Connect Identity Provider]
+- [Configuring OpenID Connect in Amazon Web Services]
+- [Creating OpenID Connect (OIDC) identity providers]
+- [Obtaining the thumbprint for an OpenID Connect Identity Provider]
 
 ## License
 
 © 2021 [Daniel Morris](https://unfun.co)  
 Made available under the terms of the [Apache License 2.0].
 
-[Apache License 2.0]: LICENSE.md
-[Complete example]: examples/complete
-[Configuring OpenID Connect in Amazon Web Services]: https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/configuring-openid-connect-in-amazon-web-services
-[Creating OpenID Connect (OIDC) identity providers]: https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_providers_create_oidc.html
-[Make]: https://www.gnu.org/software/make/
-[Obtaining the thumbprint for an OpenID Connect Identity Provider]: https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_providers_create_oidc_verify-thumbprint.html
-[Terraform]: https://www.terraform.io
+[apache license 2.0]: LICENSE.md
+[complete example]: examples/complete
+[configuring openid connect in amazon web services]: https://docs.github.com/en/actions/deployment/security-hardening-your-deployments/configuring-openid-connect-in-amazon-web-services
+[creating openid connect (oidc) identity providers]: https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_providers_create_oidc.html
+[make]: https://www.gnu.org/software/make/
+[obtaining the thumbprint for an openid connect identity provider]: https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_providers_create_oidc_verify-thumbprint.html
+[terraform]: https://www.terraform.io

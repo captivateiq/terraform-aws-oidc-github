@@ -13,7 +13,7 @@
 // limitations under the License.
 
 locals {
-  github_organizations = [for repo in var.github_repositories : split("/", repo)[0]]
+  github_organizations = toset([for repo in var.github_repositories : split("/", repo)[0]])
   oidc_provider_arn    = var.enabled ? (var.create_oidc_provider ? aws_iam_openid_connect_provider.github[0].arn : data.aws_iam_openid_connect_provider.github[0].arn) : ""
   partition            = data.aws_partition.current.partition
 }
@@ -69,7 +69,12 @@ resource "aws_iam_openid_connect_provider" "github" {
     ["sts.amazonaws.com"]
   )
 
-  tags            = var.tags
-  thumbprint_list = [var.github_thumbprint]
-  url             = "https://token.actions.githubusercontent.com"
+  tags = var.tags
+  url  = "https://token.actions.githubusercontent.com%{if var.enterprise_slug != ""}/${var.enterprise_slug}%{endif}"
+  thumbprint_list = var.additional_thumbprints != null ? distinct(
+    concat(
+      [data.tls_certificate.github.certificates[0].sha1_fingerprint],
+      [for thumbprint in var.additional_thumbprints : thumbprint]
+    )
+  ) : [data.tls_certificate.github.certificates[0].sha1_fingerprint]
 }
