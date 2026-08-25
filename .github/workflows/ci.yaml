@@ -18,6 +18,10 @@ on:
     - LICENSE.md
     - README.md
 
+permissions:
+  contents: write
+  id-token: write
+
 jobs:
   verify:
     name: Verify
@@ -53,3 +57,29 @@ jobs:
         aws-region: ${{ secrets.AWS_REGION }}
         role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github
     - run: aws sts get-caller-identity
+
+  release-module:
+    needs: verify
+    runs-on: ubuntu-latest
+    if: ${{ github.ref == 'refs/heads/main' }}
+    outputs:
+      new_tag: ${{ steps.tag_version.outputs.new_tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Bump version and push tag
+        id: tag_version
+        uses: mathieudutour/github-tag-action@v6.2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+  publish-module:
+    needs: release-module
+    if: ${{ github.ref == 'refs/heads/main' && needs.release-module.outputs.new_tag != '' }}
+    uses: captivateiq/gha-terraform-publish/.github/workflows/publish-tf-module.yml@main
+    with:
+      module_name: oidc-github
+      provider: aws
+      version: ${{ needs.release-module.outputs.new_tag }}
+    permissions:
+      id-token: write
+      contents: read
