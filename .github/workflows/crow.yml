@@ -1,0 +1,49 @@
+name: CIQ-Crow PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, ready_for_review]
+
+  pull_request_review_comment:
+    types: [created]
+
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number to re-review'
+        required: true
+      force_full:
+        description: 'Ignore previous DynamoDB state and run a full review'
+        required: false
+        default: 'false'
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: ${{ github.event_name == 'pull_request_review_comment' && format('pr-review-comment-{0}', github.event.pull_request.number) || format('pr-review-{0}', github.run_id) }}
+  cancel-in-progress: false
+
+jobs:
+  review:
+    name: AI Code Review
+    if: |
+      (github.event_name != 'pull_request' || (
+        (github.event.action != 'labeled' || github.event.label.name == 'CROW') &&
+        (github.event.action == 'labeled' || github.event.pull_request.base.ref == 'main' || contains(github.event.pull_request.labels.*.name, 'CROW')) &&
+        (github.event.pull_request.draft != true || contains(github.event.pull_request.labels.*.name, 'CROW'))
+      )) &&
+      (github.event_name != 'pull_request_review_comment' || github.event.pull_request.base.ref == 'main')
+    runs-on: ubuntu-26.04-arm
+    timeout-minutes: 15
+    steps:
+      - uses: captivateiq/ciq-crow@main
+        with:
+          pr_number: ${{ github.event.inputs.pr_number || github.event.pull_request.number }}
+          force_full: ${{ github.event.action == 'labeled' && github.event.label.name == 'CROW' && 'true' || github.event.inputs.force_full || 'false' }}
+          crow_app_id: ${{ secrets.CROW_APP_ID }}
+          crow_app_install_id: ${{ secrets.CROW_APP_INSTALL_ID }}
+          crow_app_key: ${{ secrets.CROW_APP_KEY }}
+          crow_google_json: ${{ secrets.CROW_GOOGLE_JSON }}
